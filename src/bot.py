@@ -17,6 +17,15 @@ def check_institutional_strategy(symbol, balance):
     logger.info(f"Institutional Signal detected for {symbol}: {direction} (score: {score})")
 
     try:
+        # Get symbol info for point value
+        symbol_info = mt5.symbol_info(symbol)
+        if symbol_info is None:
+            logger.error(f"Failed to get symbol info for {symbol}")
+            return
+
+        point = symbol_info.point
+        buffer = CONFIG['STOP_DISTANCE_PIPS'] * point
+
         df_m1 = data.get_candles(symbol, timeframe='M1', count=20)
         if df_m1 is None or df_m1.empty:
             return
@@ -29,8 +38,8 @@ def check_institutional_strategy(symbol, balance):
         ll = lookback_10['low'].min()
 
         if direction == "BUY":
-            # Stop-loss just below the low that was swept (or the 10-bar low)
-            sl = min(ll, last_bar['low']) - 0.0001
+            # Stop-loss just below the low that was swept (or the 10-bar low) + buffer
+            sl = min(ll, last_bar['low']) - buffer
             risk_dist = entry_price - sl
             tp = entry_price + (2 * risk_dist)
 
@@ -40,8 +49,8 @@ def check_institutional_strategy(symbol, balance):
             executor.place_market_order(symbol, lot, "buy", sl, tp, magic=CONFIG['MAGIC'])
 
         elif direction == "SELL":
-            # Stop-loss just above the high that was swept (or the 10-bar high)
-            sl = max(hh, last_bar['high']) + 0.0001
+            # Stop-loss just above the high that was swept (or the 10-bar high) + buffer
+            sl = max(hh, last_bar['high']) + buffer
             risk_dist = sl - entry_price
             tp = entry_price - (2 * risk_dist)
 
