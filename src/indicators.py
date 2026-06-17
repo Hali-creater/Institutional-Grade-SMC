@@ -92,27 +92,26 @@ def check_liquidity_sweep(df):
 def calculate_cvd(ticks):
     """
     Pillar 3: CVD
-    - Tick-by-tick cumulative volume delta.
+    - Tick-by-tick cumulative volume delta using vectorized operations.
     """
     if ticks is None or ticks.empty:
         return None
 
-    cvd = 0
-    cvd_values = []
+    # Vectorized calculation of volume delta
+    delta = pd.Series(0, index=ticks.index, dtype=float)
 
-    for i, row in ticks.iterrows():
-        # TICK_FLAG_BUY / TICK_FLAG_SELL are reliable if present
-        if row['flags'] & mt5.TICK_FLAG_BUY:
-            cvd += row['volume']
-        elif row['flags'] & mt5.TICK_FLAG_SELL:
-            cvd -= row['volume']
-        else:
-            # Fallback
-            if 'last' in row and row['last'] > 0:
-                if row['last'] >= row['ask']:
-                    cvd += row['volume']
-                elif row['last'] <= row['bid']:
-                    cvd -= row['volume']
-        cvd_values.append(cvd)
+    buy_mask = (ticks['flags'] & mt5.TICK_FLAG_BUY).astype(bool)
+    sell_mask = (ticks['flags'] & mt5.TICK_FLAG_SELL).astype(bool)
 
-    return cvd_values
+    delta.loc[buy_mask] = ticks.loc[buy_mask, 'volume']
+    delta.loc[sell_mask] = -ticks.loc[sell_mask, 'volume']
+
+    # Fallback for ticks without clear buy/sell flags
+    remaining_mask = ~(buy_mask | sell_mask)
+    if remaining_mask.any() and 'last' in ticks.columns:
+        last_above_ask = (ticks['last'] >= ticks['ask']) & remaining_mask
+        last_below_bid = (ticks['last'] <= ticks['bid']) & remaining_mask
+        delta.loc[last_above_ask] = ticks.loc[last_above_ask, 'volume']
+        delta.loc[last_below_bid] = -ticks.loc[last_below_bid, 'volume']
+
+    return delta.cumsum().tolist()
