@@ -32,3 +32,23 @@ def get_candles(symbol, timeframe='M5', count=500):
     df = df[['time','open','high','low','close','tick_volume']]
     df.columns = ['time','open','high','low','close','volume']
     return df
+
+def get_ticks(symbol, count=1000):
+    ticks = mt5.copy_ticks_from_pos(symbol, 0, count, mt5.COPY_TICKS_ALL)
+    if ticks is None:
+        logger.error(f'No ticks for {symbol}')
+        return None
+    df = pd.DataFrame(ticks)
+    df['time'] = pd.to_datetime(df['time'], unit='s')
+    return df
+
+def get_last_5m_ticks(symbol):
+    to_date = datetime.now()
+    from_date = to_date - timedelta(minutes=5)
+    ticks = mt5.copy_ticks_range(symbol, from_date, to_date, mt5.COPY_TICKS_ALL)
+    if ticks is None:
+        logger.error(f'No ticks for {symbol} in last 5m')
+        return None
+    df = pd.DataFrame(ticks)
+    df['time'] = pd.to_datetime(df['time'], unit='s')
+    return df
