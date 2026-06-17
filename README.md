@@ -35,10 +35,33 @@
 - `src/risk.py` controls position sizing. It uses MT5 symbol info to compute approximate lot; you can change `RISK_PERCENT` in `.env`.
 
 ## How it works (high-level)
-1. Load multi-timeframe OHLC from MT5 for configured symbols.
-2. Use `smartmoneyconcepts` indicators (swing, bos/choch, fvg, ob) to detect SMC conditions.
-3. If filters pass (session filter, no-news placeholder), signal is validated and a limit order is placed at 50% of OB/FVG with SL & TP calculated.
-4. Risk manager determines lot size for target 1% (or configured) risk per trade.
+The bot implements two distinct trading strategies that run in parallel:
+
+### 1. Smart Money Concepts (SMC) Strategy
+- Detects Liquidity Sweeps, BOS/CHoCH, and Order Blocks (OB) or Fair Value Gaps (FVG).
+- Places **Limit Orders** at the 50% level of the detected OB/FVG.
+- Requires rejection confirmation on lower timeframes.
+
+### 2. Institutional Footprint Strategy (New)
+This strategy tracks institutional activity by monitoring three specific "footprints":
+
+- **Pillar 1: Order Absorption**
+  - Detects high-volume, small-range candles where institutions are accumulating or distributing.
+  - *Detection:* 1-minute bar volume > 2x average, body size < 30% of total range.
+- **Pillar 2: Liquidity Sweep**
+  - Identifies when price triggers stop-losses above/below recent ranges before reversing.
+  - *Detection:* 10-bar high/low breakout followed by a close back inside the range.
+- **Pillar 3: CVD Divergence (Cumulative Volume Delta)**
+  - Measures net buying/selling pressure vs price action using tick-by-tick data over 5 minutes.
+  - *Detection:* Divergence between cumulative volume delta and price trend.
+
+**The Golden Rule (2 out of 3):**
+A trade is only executed if at least 2 of the 3 pillars agree on the direction. This strategy uses **Market Orders** for immediate execution upon signal confirmation.
+
+### Risk Management (Unified)
+- **Account Risk:** Fixed at 1% of total account balance per trade.
+- **Stop-Loss:** Placed just beyond the sweep levels or OB boundaries.
+- **Take-Profit:** Set at a fixed 2:1 reward-to-risk ratio.
 
 ## Limitations & TODO
 - News filter is a placeholder (not implemented). Consider integrating a news API or a calendar to skip high-impact events.
