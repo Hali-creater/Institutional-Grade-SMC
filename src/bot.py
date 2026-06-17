@@ -7,59 +7,6 @@ import pandas as pd
 
 logger = get_logger('bot')
 
-def check_smc_strategy(symbol, balance):
-    tf_htf, tf_setup, tf_entry = CONFIG['TIMEFRAMES']
-    df_htf = data.get_candles(symbol, timeframe=tf_htf, count=300)
-    df_setup = data.get_candles(symbol, timeframe=tf_setup, count=300)
-    df_entry = data.get_candles(symbol, timeframe=tf_entry, count=200)
-
-    if df_htf is None or df_setup is None or df_entry is None:
-        logger.warning('Missing data for SMC strategy on %s - skipping', symbol)
-        return
-
-    if not signals.session_filter():
-        logger.info('Outside session window for SMC strategy - skipping')
-        return
-
-    try:
-        liquidity = signals.liquidity_sweep_check(df_htf)
-        bos = signals.bos_check(df_setup)
-        obs, fvgs = signals.find_ob_fvg(df_setup)
-        chosen_zone = None
-        # pick the freshest OB or FVG (this is a simple pick)
-        if obs is not None and len(obs)>0:
-            chosen_zone = obs[-1]
-        elif fvgs is not None and len(fvgs)>0:
-            chosen_zone = fvgs[-1]
-
-        if chosen_zone is None:
-            logger.info('No OB/FVG found for %s', symbol)
-            return
-
-        entry_price = signals.entry_zone_50(chosen_zone)
-        if entry_price is None:
-            logger.info('No entry price derived - skipping')
-            return
-
-        # check rejection on entry timeframe
-        rej = signals.rejection_check(df_entry, entry_price)
-        if not rej:
-            logger.info('No rejection at entry timeframe - skipping')
-            return
-
-        # Compute SL/TP: SL beyond liquidity or OB - for demo simple SL (use fixed pip cushion)
-        sl = entry_price - 0.002 if entry_price>df_entry['close'].iloc[-1] else entry_price + 0.002
-        tp = entry_price + (abs(entry_price - sl) * 2.0)  # 1:2 by default
-
-        lot = risk.compute_lot_from_risk(mt5, symbol, balance, CONFIG['RISK_PERCENT'], abs(entry_price-sl))
-        lot = max(CONFIG['DEFAULT_LOT_MIN'], min(lot, CONFIG['DEFAULT_LOT_MAX']))
-
-        logger.info('Placing SMC limit order for %s at %s lot=%s sl=%s tp=%s', symbol, entry_price, lot, sl, tp)
-        res = executor.place_limit_order(symbol, lot, entry_price, sl, tp, magic=CONFIG['MAGIC'])
-        logger.info('SMC Order send result: %s', res)
-    except Exception as e:
-        logger.exception('Error checking SMC strategy for %s: %s', symbol, e)
-
 def check_institutional_strategy(symbol, balance):
     direction, score = signals.get_strategy_signals(symbol)
 
@@ -115,10 +62,7 @@ def run_once():
     for symbol in CONFIG['SYMBOLS']:
         logger.info('Checking symbol: %s', symbol)
 
-        # Run original SMC Strategy
-        check_smc_strategy(symbol, balance)
-
-        # Run new Institutional Strategy
+        # Run Institutional Strategy
         check_institutional_strategy(symbol, balance)
 
     data.shutdown()
