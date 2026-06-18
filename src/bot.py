@@ -8,6 +8,11 @@ import pandas as pd
 logger = get_logger('bot')
 
 def check_institutional_strategy(symbol, balance):
+    # Check for high-impact news events first
+    if signals.check_news_events(symbol):
+        logger.info(f"Skipping {symbol} due to high-impact news event.")
+        return
+
     direction, score = signals.get_strategy_signals(symbol)
 
     if direction == "NEUTRAL":

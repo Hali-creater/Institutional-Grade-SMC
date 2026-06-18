@@ -2,8 +2,10 @@ from src.indicators import (
     check_order_absorption, check_liquidity_sweep, calculate_cvd
 )
 from src.logger import get_logger
-from datetime import datetime
+from datetime import datetime, timedelta
+import MetaTrader5 as mt5
 from src import data
+from src.config import CONFIG
 import pandas as pd
 
 logger = get_logger('signals')
@@ -45,6 +47,42 @@ def check_cvd_divergence(symbol, df_m1):
         return -1
 
     return 0
+
+def check_news_events(symbol):
+    """
+    Checks MT5 Economic Calendar for high-impact news events.
+    Returns True if a high-impact event is within the configured window.
+    """
+    try:
+        window_mins = CONFIG.get('NEWS_FILTER_WINDOW_MINS', 30)
+        now = datetime.now()
+        from_date = now - timedelta(minutes=window_mins)
+        to_date = now + timedelta(minutes=window_mins)
+
+        # Get currencies for the symbol (e.g., EURUSD -> EUR, USD)
+        # For simplicity, assume standard 6-char forex or 3-char metals/crypto
+        # A more robust way would be mt5.symbol_info(symbol).currency_base/profit
+        info = mt5.symbol_info(symbol)
+        if info is None:
+            return False
+
+        currencies = [info.currency_base, info.currency_profit, "USD"] # Always include USD
+        currencies = list(set(currencies)) # unique
+
+        items = mt5.calendar_events_get(from_date=from_date, to_date=to_date)
+        if items is None or len(items) == 0:
+            return False
+
+        for item in items:
+            # Check importance (3 = high)
+            if item.importance >= mt5.CALENDAR_IMPORTANCE_HIGH:
+                if item.currency in currencies:
+                    logger.warning(f"High-impact news event detected: {item.event_name} ({item.currency}) at {datetime.fromtimestamp(item.time)}")
+                    return True
+        return False
+    except Exception as e:
+        logger.error(f"Error checking calendar: {e}")
+        return False
 
 def get_strategy_signals(symbol):
     """
