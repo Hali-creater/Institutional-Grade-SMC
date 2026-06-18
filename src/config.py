@@ -19,6 +19,8 @@ CONFIG = {
     'DEFAULT_LOT_MAX': float(getenv('DEFAULT_LOT_MAX', '1.0')),
     'MAGIC': int(getenv('MAGIC', '20251001')),
     'STOP_DISTANCE_PIPS': int(getenv('STOP_DISTANCE_PIPS', '10')),
+    'NEWS_FILTER_WINDOW_MINS': int(getenv('NEWS_FILTER_WINDOW_MINS', '30')),
+    'ATR_PERIOD': int(getenv('ATR_PERIOD', '14')),
     'TIMEFRAMES': [t.strip() for t in getenv('TIMEFRAMES', 'H1,M15,M5').split(',')],
     'LOG_LEVEL': getenv('LOG_LEVEL', 'INFO'),
     'RUN_LOOP_INTERVAL_SECONDS': int(getenv('RUN_LOOP_INTERVAL_SECONDS', '300')),

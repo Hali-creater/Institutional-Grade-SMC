@@ -29,29 +29,74 @@ def check_order_absorption(df):
 
     return 0
 
-def check_liquidity_sweep(df):
+def calculate_atr(df, period=14):
     """
-    Pillar 2: Liquidity Sweep
+    Calculate Average True Range (ATR).
+    """
+    if len(df) < period + 1:
+        return None
+
+    high = df['high']
+    low = df['low']
+    close = df['close']
+
+    tr = pd.concat([
+        high - low,
+        (high - close.shift()).abs(),
+        (low - close.shift()).abs()
+    ], axis=1).max(axis=1)
+
+    atr = tr.rolling(window=period).mean()
+    return atr.iloc[-1]
+
+def check_liquidity_sweep(df, lookback=10, atr_period=14):
+    """
+    Pillar 2: Advanced Liquidity Sweep
     - Look back 10 bars. Find highest high and lowest low.
-    - Sweep high: breaks above high but closes below it -> SELL (-1)
-    - Sweep low: breaks below low but closes above it -> BUY (1)
+    - Sweep high: broke above high but closed below it.
+    - Wick depth requirement: >= 0.3x ATR.
+    - Volume spike confirmation: >= 1.5x average.
+    - Reversal confirmation: previous bar (the one before the signal) was moving in direction.
     """
-    if len(df) < 11:
+    if len(df) < max(lookback + 1, 21, atr_period + 1):
         return 0
 
-    lookback_df = df.iloc[-11:-1]
+    atr = calculate_atr(df, atr_period)
+    if atr is None:
+        return 0
+
+    lookback_df = df.iloc[-lookback-1:-1]
     hh = lookback_df['high'].max()
     ll = lookback_df['low'].min()
 
     last_bar = df.iloc[-1]
+    prev_bar = df.iloc[-2]
+
+    # Volume spike (20-bar avg)
+    avg_volume = df['volume'].iloc[-21:-1].mean()
+    volume_spike = last_bar['volume'] >= (avg_volume * 1.5)
+
+    # Calculate wicks
+    upper_wick = last_bar['high'] - max(last_bar['open'], last_bar['close'])
+    lower_wick = min(last_bar['open'], last_bar['close']) - last_bar['low']
 
     # Sweep High (SELL)
-    if last_bar['high'] > hh and last_bar['close'] < hh:
-        return -1
+    sweep_high = last_bar['high'] > hh and last_bar['close'] < hh
+    if sweep_high:
+        wick_deep = upper_wick >= (atr * 0.3)
+        # Reversal confirmation: last candle close < open (bearish) or rejection of high
+        reversal = last_bar['close'] < last_bar['open']
+        if wick_deep and volume_spike and reversal:
+            return -1
 
     # Sweep Low (BUY)
-    if last_bar['low'] < ll and last_bar['close'] > ll:
-        return 1
+    sweep_low = last_bar['low'] < ll and last_bar['close'] > ll
+    if sweep_low:
+        wick_deep = lower_wick >= (atr * 0.3)
+        # Reversal confirmation: last candle close > open (bullish) or rejection of low
+        reversal = last_bar['close'] > last_bar['open']
+        if wick_deep and volume_spike and reversal:
+            return 1
 
     return 0
 
