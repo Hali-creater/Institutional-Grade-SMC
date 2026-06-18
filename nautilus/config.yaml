@@ -1,0 +1,17 @@
+# General
+pair_a: "EURUSDm"
+pair_b: null
+entry_threshold: 2
+risk_percent: 1.0
+lookback_bars: 20
+timeframe: "1-MINUTE"
+
+# MT5 credentials (for live)
+mt5_account: 12345678
+mt5_password: your_password
+mt5_server: Exness-MT5Trial9
+
+# Backtest period
+backtest_start: "2024-01-01"
+backtest_end: "2024-12-31"
+initial_capital: 10000.0
